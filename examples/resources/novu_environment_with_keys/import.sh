@@ -1,0 +1,1 @@
+terraform import novu_environment_with_keys.example "abcdef1234567890abcdef12"
