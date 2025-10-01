@@ -24,6 +24,7 @@ type NovuApiClient interface {
 	GetWorkflowPolymorphic(ctx context.Context, workflowID string) (*WorkflowResponseDto, *ApiClientResponse, error)
 	UpdateWorkflow(ctx context.Context, workflowID string, updateReq *components.UpdateWorkflowDto) (*WorkflowResponseDto, error)
 	CreateWorkflow(ctx context.Context, createReq *components.CreateWorkflowDto) (*WorkflowResponseDto, error)
+	CreateIntegration(ctx context.Context, createReq *components.CreateIntegrationRequestDto) (*components.IntegrationResponseDto, *ApiClientResponse, error)
 }
 
 type ApiClient struct {

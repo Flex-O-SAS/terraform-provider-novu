@@ -260,9 +260,8 @@ func (d *EnvironmentResource) Create(ctx context.Context, req resource.CreateReq
 	res, err := d.client.Environments.Create(ctx, createReq, nil)
 
 	if err != nil {
-		truc := err.Error()
 		tflog.Info(ctx, "Detailed error", map[string]interface{}{
-			"detailed_error": truc,
+			"detailed_error": err.Error(),
 		})
 		var e1 *apierrors.ErrorDto
 		if errors.As(err, &e1) {
@@ -279,13 +278,13 @@ func (d *EnvironmentResource) Create(ctx context.Context, req resource.CreateReq
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Detailed error: %s \n"+
 				"Are you sure you are on the right Novu plan ? ", e3.Message))
 		}
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create environment, got error: %s \n"+
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create environment: %s \n"+
 			"Are you sure you are on the right Novu plan ? ", err))
 		return
 	}
 
 	if res == nil || res.EnvironmentResponseDto == nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create environment, got error: %s", "Response is nil"))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create environment: %s", "Response is nil"))
 		return
 	}
 
@@ -322,7 +321,7 @@ func (d *EnvironmentResource) Delete(ctx context.Context, req resource.DeleteReq
 
 	_, err := d.client.Environments.Delete(ctx, data.Id.ValueString(), nil)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete environment, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to delete environment: %s", err))
 		return
 	}
 }
@@ -339,7 +338,7 @@ func (d *EnvironmentResource) Read(ctx context.Context, req resource.ReadRequest
 
 	res, err := d.client.Environments.List(ctx, nil)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environment, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environment: %s", err))
 		return
 	}
 
@@ -434,7 +433,7 @@ func (r *EnvironmentResource) Update(ctx context.Context, req resource.UpdateReq
 
 	httpRes, err := r.client.Environments.Update(ctx, plan.Id.ValueString(), updateReq, nil)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update environment, got error: %s"+
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to update environment: %s"+
 			"Are you sure you are on the right Novu plan and this environment can be updated? ", err))
 		return
 	}
