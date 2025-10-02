@@ -144,6 +144,7 @@ func (p *NovuProvider) Resources(ctx context.Context) []func() resource.Resource
 	return []func() resource.Resource{
 		NewEnvironmentResource,
 		NewWorkflowResource,
+		NewTopicResource,
 	}
 }
 
