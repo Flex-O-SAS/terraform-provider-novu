@@ -12,7 +12,7 @@ import (
 	"github.com/hashicorp/terraform-plugin-testing/tfjsonpath"
 )
 
-func TestWorkflowResource_Basic(t *testing.T) {
+func TestWorkflowResourceBasic(t *testing.T) {
 
 	randInt := acctest.RandIntRange(0, 1000)
 	rname := fmt.Sprintf("tf-acc-%d", randInt)
@@ -111,6 +111,7 @@ func TestWorkflowResource_Basic(t *testing.T) {
 						}),
 					),
 					// no push integration => integration error
+					// NB : this step will fail if there is an active push integration
 					statecheck.ExpectKnownValue("novu_workflow.test", tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("push_step").AtMapKey("issues"),
 						knownvalue.ObjectExact(
 							map[string]knownvalue.Check{
@@ -121,6 +122,7 @@ func TestWorkflowResource_Basic(t *testing.T) {
 					),
 					// no push integration => integration error
 					// no control values => 2 errors
+					// NB : this step will fail if there is an active push integration
 					statecheck.ExpectKnownValue("novu_workflow.test", tfjsonpath.New("steps").AtSliceIndex(1).AtMapKey("push_step").AtMapKey("issues"),
 						knownvalue.ObjectExact(
 							map[string]knownvalue.Check{
@@ -138,6 +140,27 @@ func TestWorkflowResource_Basic(t *testing.T) {
 					PreApply: []plancheck.PlanCheck{
 						plancheck.ExpectEmptyPlan(),
 					},
+				},
+			},
+		},
+	})
+}
+
+func TestWorkflowResourceWithFcmIntegration(t *testing.T) {
+	randInt := acctest.RandIntRange(0, 1000)
+	rname := fmt.Sprintf("tf-acc-%d", randInt)
+	workflow_id := fmt.Sprintf("tf-acc-%d", randInt)
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		PreCheck:                 func() { testAccPreCheck(t) },
+		Steps: []resource.TestStep{
+			{
+				Config: testAccFullWorkflowResourceConfigWithFcmIntegration(workflow_id, rname),
+				// with fcm integration => no issues
+				ConfigStateChecks: []statecheck.StateCheck{
+					statecheck.ExpectKnownValue("novu_workflow.test", tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("push_step").AtMapKey("issues"),
+						knownvalue.Null(),
+					),
 				},
 			},
 		},
@@ -177,6 +200,35 @@ resource "novu_workflow" "test" {
   		name = "test push step 2"
 	  }
 	}
+  ]
+}
+`, workflow_id, name)
+}
+
+func testAccFullWorkflowResourceConfigWithFcmIntegration(workflow_id string, name string) string {
+	return fmt.Sprintf(`
+resource "novu_fcm_integration" "test" {
+  name = "test fcm integration"
+  identifier = "test fcm integration"
+  active = true
+  check = true
+  json_configuration = "{\"test\" : \"test\"}"
+}
+
+resource "novu_workflow" "test" {
+  depends_on = [novu_fcm_integration.test]
+  workflow_id = "%s"
+  name = "%s"
+  steps = [
+    {
+      push_step = {
+        name = "test push step"
+		control_values = {
+		  subject = "test subject"
+		  body = "test body"
+		}
+      }
+    }
   ]
 }
 `, workflow_id, name)
