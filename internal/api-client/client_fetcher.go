@@ -55,7 +55,7 @@ func populateSecurity(req *http.Request, c *ApiClient) {
 
 // not sure if we should use body io.Reader or any like in the _poly
 func (c *ApiClient) call(ctx context.Context, method string, uri string, body io.Reader) (*ApiClientResponse, error) {
-	fullUrl, err := url.JoinPath(c.configuration.serverUrl, "v2", uri)
+	fullUrl, err := url.JoinPath(c.configuration.serverUrl, uri)
 	if err != nil {
 		tflog.Debug(ctx, "error joining path", map[string]interface{}{
 			"error":     err,

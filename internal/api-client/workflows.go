@@ -16,7 +16,7 @@ const (
 	StrErrUnmarshalWorkflow = "error unmarshalling workflow"
 	StrErrUpdateWorkflow    = "error updating workflow"
 
-	workflowPath = "/workflows/"
+	workflowPath = "v2/workflows/"
 )
 
 // Option 1 : récupère le body en []byte, obligé d'unmarshal à l'intérieur de la fonction

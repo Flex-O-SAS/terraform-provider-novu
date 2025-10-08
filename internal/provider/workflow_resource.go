@@ -342,9 +342,8 @@ func (r *WorkflowResource) Schema(ctx context.Context, req resource.SchemaReques
 								"issues": schema.SingleNestedAttribute{
 									MarkdownDescription: "Issues associated with the push step",
 									Computed:            true,
-									PlanModifiers:       []planmodifier.Object{
-										//objectplanmodifier.UseStateForUnknown(),
-										//customvalidators.ObjectUnkownOnSiblingNotKnownVal("step_id"),
+									PlanModifiers: []planmodifier.Object{
+										customvalidators.ObjectUnkownOnSiblingNotKnownVal("step_id"),
 									},
 									Attributes: map[string]schema.Attribute{
 										"controls": schema.ListNestedAttribute{
@@ -442,15 +441,16 @@ func (r *WorkflowResource) Create(ctx context.Context, req resource.CreateReques
 
 	workflowRes, err := r.apiClient.CreateWorkflow(ctx, createReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create workflow, got error: %s", helpers.DisplayBetterSlugError(err, "workflow_id")))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create workflow: %s", err))
 		return
 	}
 	if workflowRes == nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm creation of workflow, got error: %s", "Response is nil"))
+		resp.Diagnostics.AddError("Client Error", "Unable to confirm creation of workflow: Response is nil")
 		return
 	}
 
-	// Read the workflow response into the data model
+	// Read the workflow response into the data model -> isn't that a mistake ?
+	// TODO Fix this crap
 	resp.Diagnostics.Append(data.setFromResponseDTO(ctx, workflowRes)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -477,7 +477,7 @@ func (r *WorkflowResource) Read(ctx context.Context, req resource.ReadRequest, r
 		if apiResponse == nil || apiResponse.StatusCode != 404 {
 			// if it's a 404, we don't throw but consider the resource as deleted (below)
 			tflog.Error(ctx, "error getting workflow", map[string]interface{}{"error": err})
-			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Could not retrieve workflow, got error: %s", err.Error()))
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Could not retrieve workflow: %s", err))
 			return
 		}
 	}
@@ -521,7 +521,7 @@ func (r *WorkflowResource) Update(ctx context.Context, req resource.UpdateReques
 
 	stepsUpdated, newSteps, err := buildStepsUpdate(plan.Steps, state.Steps)
 	if err != nil {
-		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to build steps update, got error: %s", err))
+		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to build steps update: %s", err))
 		return
 	}
 	if stepsUpdated {
@@ -541,17 +541,16 @@ func (r *WorkflowResource) Update(ctx context.Context, req resource.UpdateReques
 
 	workflowRes, err := r.apiClient.UpdateWorkflow(ctx, plan.WorkflowId.ValueString(), &updateReq)
 	if err != nil {
-		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to update workflow, got error: %s", helpers.DisplayBetterSlugError(err, "workflow_id")))
+		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to update workflow: %s", err))
 		return
 	}
 
 	if workflowRes == nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to confirm creation of workflow, got error: %s", "Response is nil"))
+		resp.Diagnostics.AddError("Client Error", "Unable to confirm creation of workflow: Response is nil")
 		return
 	}
 
 	// Read the workflow response into the state data model
-	//resp.Diagnostics.Append(plan.setFromResponseDTO(ctx, workflowRes)...)
 	resp.Diagnostics.Append(state.setFromResponseDTO(ctx, workflowRes)...)
 	if resp.Diagnostics.HasError() {
 		return
@@ -578,7 +577,7 @@ func (r *WorkflowResource) Delete(ctx context.Context, req resource.DeleteReques
 			// workflow not found => we continue with the deletion of the resource
 			resp.Diagnostics.AddWarning("Client warning", fmt.Sprintf("Unable to find workflow with id %s, so it will be considered as already deleted", data.WorkflowId.ValueString()))
 		} else {
-			resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to delete workflow, got error: %s", err))
+			resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to delete workflow: %s", err))
 			return
 		}
 	}
@@ -616,7 +615,7 @@ func (data *WorkflowResourceModel) setFromResponseDTO(ctx context.Context, workf
 
 	stepsList, err := buildStepsList(ctx, workflow)
 	if err != nil {
-		rdiags.AddError("Client Error", fmt.Sprintf("Unable to build steps list, got error: %s", err))
+		rdiags.AddError("Client Error", fmt.Sprintf("Unable to build steps list: %s", err))
 	}
 	data.Steps = stepsList
 
@@ -797,7 +796,7 @@ func readPushStepAsModel(ctx context.Context, step *api_client.WorkflowResponseD
 		pushStepModel.Issues = types.ObjectNull(issuesType.AttrTypes)
 	} else {
 		var issuesModel WorkflowStepIssuesResourceModel
-		var controlsModel []WorkflowStepIssuesControlsResourceModel
+		var controlsModel = make([]WorkflowStepIssuesControlsResourceModel, 0)
 		if controlsMap := issues.Controls; len(controlsMap) > 0 {
 			for key, controls := range controlsMap {
 				for _, control := range controls {
@@ -810,7 +809,7 @@ func readPushStepAsModel(ctx context.Context, step *api_client.WorkflowResponseD
 				}
 			}
 		}
-		var integrationModel []WorkflowStepIssuesIntegrationResourceModel
+		var integrationModel = make([]WorkflowStepIssuesIntegrationResourceModel, 0)
 		if integrationMap := issues.Integration; len(integrationMap) > 0 {
 			for key, integrations := range integrationMap {
 				for _, integration := range integrations {
@@ -869,7 +868,7 @@ func createWorklowRequest(ctx context.Context, data *WorkflowResourceModel) (*co
 		for _, step := range steps {
 			novuStep, err := step.convertToNovuStep()
 			if err != nil {
-				diags.AddError("Client Error", fmt.Sprintf("Unable to convert step to novu step, got error: %s", err))
+				diags.AddError("Client Error", fmt.Sprintf("Unable to convert step to novu step: %s", err))
 				return nil, diags
 			}
 			createSteps = append(createSteps, *novuStep)
@@ -906,7 +905,7 @@ func buildStepsUpdate(planSteps []WorkflowStepResourceModel, stateSteps []Workfl
 	for i := 0; i < nbPlanSteps; i++ {
 		novuStep, err := planSteps[i].convertToNovuStep()
 		if err != nil {
-			return false, nil, fmt.Errorf("unable to convert step to novu step, got error: %s", err)
+			return false, nil, fmt.Errorf("unable to convert step to novu step: %s", err)
 		}
 		updateSteps := toUpdateSteps(novuStep)
 		newSteps = append(newSteps, updateSteps)

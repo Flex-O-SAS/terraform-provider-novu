@@ -49,9 +49,7 @@ plutôt qu'un truc générique immonde ?
 
 
 ## NB : 
-This repo uses a fork of the repo github.com/novuhq/novu-go to add direct API call functionality, when the SDK resources are broken.
-It is set up with a go mod replace that points to said fork.
-To remove this replace, use `go mod edit -dropreplace=github.com/novuhq/novu-go`
+Due to the novu SDK being partially broken, this repo mixes the use of the SDK and direct API calls. The API Calls use the SDK structures and models when possible, and may break with new SDK versions.
 
 ## Novu SDK Version
 Be careful before upgrading the novu SDK :

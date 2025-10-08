@@ -59,20 +59,20 @@ Optional:
 Read-Only:
 
 - `id` (String) ID of the push step
-- `issues` (Attributes) Issues associated with the step (see [below for nested schema](#nestedatt--steps--push_step--issues))
-- `origin` (String) Origin of the workflow
+- `issues` (Attributes) Issues associated with the push step (see [below for nested schema](#nestedatt--steps--push_step--issues))
+- `origin` (String) Origin of the push step
 - `slug` (String) Slug of the push step
 - `step_id` (String) ID of the push step
-- `workflow_database_id` (String) Workflow database ID
-- `workflow_id` (String) Workflow ID
+- `workflow_database_id` (String) Workflow database ID of the push step
+- `workflow_id` (String) Workflow ID of the push steps
 
 <a id="nestedatt--steps--push_step--control_values"></a>
 ### Nested Schema for `steps.push_step.control_values`
 
 Optional:
 
-- `body` (String) Body content of the push notification.
-- `subject` (String) Subject/title of the push notification.
+- `body` (String) Body content of the push notification. The push step will have an error if it is not set.
+- `subject` (String) Subject/title of the push notification. The push step will have an error if it is not set.
 
 
 <a id="nestedatt--steps--push_step--issues"></a>
