@@ -3,10 +3,12 @@ package provider
 import (
 	"context"
 	"os"
+	"time"
 
 	api_client "terraform-provider-novu/internal/api-client"
 
 	novugo "github.com/novuhq/novu-go"
+	"github.com/novuhq/novu-go/retry"
 
 	"github.com/hashicorp/terraform-plugin-framework/datasource"
 	"github.com/hashicorp/terraform-plugin-framework/path"
@@ -116,6 +118,15 @@ func (p *NovuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 
 	sdkOpts := []novugo.SDKOption{
 		novugo.WithSecurity(apiKey),
+		//Override default 1 hour max interval
+		novugo.WithRetryConfig(retry.Config{
+			Strategy: "backoff",
+			Backoff: &retry.BackoffStrategy{
+				InitialInterval: int(1 * time.Second),
+				MaxInterval:     int(1 * time.Minute),
+				Exponent:        1.5,
+			},
+		}),
 	}
 	apiClientOpts := []api_client.ApiClientOption{
 		api_client.WithApiKey(apiKey),
@@ -139,6 +150,7 @@ func (p *NovuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 func (p *NovuProvider) Resources(ctx context.Context) []func() resource.Resource {
 	return []func() resource.Resource{
 		NewWorkflowResource,
+		NewFCMIntegrationResource,
 	}
 }
 

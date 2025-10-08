@@ -106,7 +106,7 @@ func (d *ApiKeysDataSource) Read(ctx context.Context, req datasource.ReadRequest
 
 	environments, err := d.client.Environments.List(ctx, nil)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environments, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environments: %s", err))
 		return
 	}
 	environmentsList := &environments.EnvironmentResponseDtos

@@ -105,37 +105,41 @@ func (d *EnvironmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 		return
 	}
 
+	if state.Id.IsNull() && state.Name.IsNull() &&
+		state.Identifier.IsNull() && state.ParentId.IsNull() &&
+		state.Slug.IsNull() && state.IsProduction.IsNull() {
+		resp.Diagnostics.AddError("Client Error", "No criteria provided")
+		return
+	}
+
 	environments, err := d.client.Environments.List(ctx, nil)
 	if err != nil {
-		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environments, got error: %s", err))
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to read environments: %s", err))
 		return
 	}
 	environmentsList := &environments.EnvironmentResponseDtos
-	//tflog.Info(ctx, "Environment", map[string]interface{}{"environment": string(jsonData)})
-	//tflog.Info(ctx, "Environments", map[string]interface{}{"environments": environmentsList})
-	//tflog.Info(ctx, "Environment", map[string]interface{}{"environment": string(jsonData)})
 
 	foundEnvironments := []EnvironmentDataSourceModel{}
 
 	for _, environment := range *environmentsList {
 		if !state.Id.IsNull() && state.Id.ValueString() != environment.ID {
-			tflog.Info(ctx, "Environment id does not match", map[string]interface{}{"environment": environment.ID, "state": state.Id.ValueString()})
+			tflog.Debug(ctx, "Environment id does not match", map[string]interface{}{"environment": environment.ID, "state": state.Id.ValueString()})
 			continue
 		}
 		if !state.Name.IsNull() && state.Name.ValueString() != environment.Name {
-			tflog.Info(ctx, "Environment name does not match", map[string]interface{}{"environment": environment.Name, "state": state.Name.ValueString()})
+			tflog.Debug(ctx, "Environment name does not match", map[string]interface{}{"environment": environment.Name, "state": state.Name.ValueString()})
 			continue
 		}
 		if !state.Identifier.IsNull() && state.Identifier.ValueString() != environment.Identifier {
-			tflog.Info(ctx, "Environment identifier does not match", map[string]interface{}{"environment": environment.Identifier, "state": state.Identifier.ValueString()})
+			tflog.Debug(ctx, "Environment identifier does not match", map[string]interface{}{"environment": environment.Identifier, "state": state.Identifier.ValueString()})
 			continue
 		}
 		if !state.ParentId.IsNull() && state.ParentId.ValueString() != *environment.ParentID {
-			tflog.Info(ctx, "Environment parent id does not match", map[string]interface{}{"environment": *environment.ParentID, "state": state.ParentId.ValueString()})
+			tflog.Debug(ctx, "Environment parent id does not match", map[string]interface{}{"environment": *environment.ParentID, "state": state.ParentId.ValueString()})
 			continue
 		}
 		if !state.Slug.IsNull() && state.Slug.ValueString() != *environment.Slug {
-			tflog.Info(ctx, "Environment slug does not match", map[string]interface{}{"environment": *environment.Slug, "state": state.Slug.ValueString()})
+			tflog.Debug(ctx, "Environment slug does not match", map[string]interface{}{"environment": *environment.Slug, "state": state.Slug.ValueString()})
 			continue
 		}
 
@@ -145,7 +149,7 @@ func (d *EnvironmentDataSource) Read(ctx context.Context, req datasource.ReadReq
 		}
 
 		if !state.IsProduction.IsNull() && state.IsProduction.ValueBool() != isProduction {
-			tflog.Info(ctx, "Environment is production does not match", map[string]interface{}{"environment": isProduction, "state": state.IsProduction.ValueBool()})
+			tflog.Debug(ctx, "Environment is production does not match", map[string]interface{}{"environment": isProduction, "state": state.IsProduction.ValueBool()})
 			continue
 		}
 
