@@ -26,6 +26,7 @@ website/node_modules
 *.iml
 
 examples/provider-install-verification
+README-internal.md
 
 internal/provider/examples/
 

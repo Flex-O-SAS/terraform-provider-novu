@@ -6,16 +6,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
 	api_client "terraform-provider-novu/internal/api-client"
 	"terraform-provider-novu/internal/customplanmodifiers"
 	"terraform-provider-novu/internal/helpers"
 	customvalidators "terraform-provider-novu/internal/validators"
 
 	"github.com/hashicorp/terraform-plugin-framework-validators/objectvalidator"
+	"github.com/hashicorp/terraform-plugin-framework-validators/stringvalidator"
 	"github.com/hashicorp/terraform-plugin-framework/attr"
 	"github.com/hashicorp/terraform-plugin-framework/diag"
 	"github.com/hashicorp/terraform-plugin-framework/schema/validator"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 
 	"github.com/hashicorp/terraform-plugin-framework/path"
 	"github.com/hashicorp/terraform-plugin-framework/resource"
@@ -154,6 +155,13 @@ func (r *WorkflowResource) Schema(ctx context.Context, req resource.SchemaReques
 			"workflow_id": schema.StringAttribute{
 				MarkdownDescription: "Unique identifier of the workflow",
 				Required:            true,
+				PlanModifiers: []planmodifier.String{
+					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					// Can be removed once the SDK actually returns errors.....
+					stringvalidator.RegexMatches(regexp.MustCompile(`^[a-zA-Z0-9_-]+$`), "Workflow ID must contain only letters, numbers, underscores and hyphens"),
+				},
 			},
 			"slug": schema.StringAttribute{ // not returned by GET
 				MarkdownDescription: "Slug of the workflow",
@@ -424,10 +432,19 @@ func (r *WorkflowResource) Create(ctx context.Context, req resource.CreateReques
 
 	// The API will continue the creation even if the workflow ID is already in use, so we need to check if it already exists
 	alreadyExists := false
-	_, apiResponse, _ := r.apiClient.GetWorkflowPolymorphic(ctx, data.WorkflowId.ValueString())
+	_, apiResponse, err := r.apiClient.GetWorkflow(ctx, data.WorkflowId.ValueString())
+
 	if apiResponse != nil && apiResponse.StatusCode == 200 {
 		alreadyExists = true
+	} else if err != nil {
+		if apiResponse != nil && apiResponse.StatusCode == 404 {
+			alreadyExists = false
+		} else {
+			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to check if the workflow already exists: %s", err))
+			return
+		}
 	}
+
 	if alreadyExists {
 		resp.Diagnostics.AddError("Client Error", "Workflow already exists : A workflow with this workflow_id already exists")
 		return
@@ -438,8 +455,12 @@ func (r *WorkflowResource) Create(ctx context.Context, req resource.CreateReques
 		resp.Diagnostics.Append(diags...)
 		return
 	}
+	if createReq == nil {
+		resp.Diagnostics.AddError("Client Error", "Unable to create workflow: Request is nil")
+		return
+	}
 
-	workflowRes, err := r.apiClient.CreateWorkflow(ctx, createReq)
+	workflowRes, err := r.client.Workflows.Create(ctx, *createReq, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Unable to create workflow: %s", err))
 		return
@@ -451,7 +472,7 @@ func (r *WorkflowResource) Create(ctx context.Context, req resource.CreateReques
 
 	// Read the workflow response into the data model -> isn't that a mistake ?
 	// TODO Fix this crap
-	resp.Diagnostics.Append(data.setFromResponseDTO(ctx, workflowRes)...)
+	resp.Diagnostics.Append(data.setFromResponseDTO(ctx, workflowRes.WorkflowResponseDto)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -470,24 +491,28 @@ func (r *WorkflowResource) Read(ctx context.Context, req resource.ReadRequest, r
 		return
 	}
 
-	// workflow, err := r.apiClient.GetWorkflow(ctx, data.WorkflowId.ValueString())         // option A
-	workflow, apiResponse, err := r.apiClient.GetWorkflowPolymorphic(ctx, data.WorkflowId.ValueString()) // option B
+	workflowRes, err := r.client.Workflows.Get(ctx, data.WorkflowId.ValueString(), nil, nil)
+	statusCode := 0
+
+	if workflowRes == nil {
+		resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Could not retrieve workflow: %s", err))
+		return
+	}
 
 	if err != nil {
-		if apiResponse == nil || apiResponse.StatusCode != 404 {
+		if workflowRes.GetHTTPMeta().Response != nil {
+			statusCode = workflowRes.GetHTTPMeta().Response.StatusCode
+		}
+		if statusCode == 404 {
+			resp.State.RemoveResource(ctx)
+			return
+		} else {
 			// if it's a 404, we don't throw but consider the resource as deleted (below)
-			tflog.Error(ctx, "error getting workflow", map[string]interface{}{"error": err})
 			resp.Diagnostics.AddError("Client Error", fmt.Sprintf("Could not retrieve workflow: %s", err))
 			return
 		}
 	}
-
-	if workflow == nil || apiResponse != nil && apiResponse.StatusCode == 404 {
-		resp.State.RemoveResource(ctx)
-		return
-	}
-
-	resp.Diagnostics.Append(data.setFromResponseDTO(ctx, workflow)...)
+	resp.Diagnostics.Append(data.setFromResponseDTO(ctx, workflowRes.WorkflowResponseDto)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -506,40 +531,41 @@ func (r *WorkflowResource) Update(ctx context.Context, req resource.UpdateReques
 		return
 	}
 
-	var updateReq components.UpdateWorkflowDto
-	updateReq.Name = plan.Name.ValueString()
-	updateReq.Origin = components.WorkflowOriginEnum(plan.Origin.ValueString())
-	helpers.SetStringPtrIfChanged(plan.Description, state.Description, &updateReq.Description)
-	helpers.SetBoolPtrIfChanged(plan.Active, state.Active, &updateReq.Active)
-	helpers.SetBoolPtrIfChanged(plan.ValidatePayload, state.ValidatePayload, &updateReq.ValidatePayload)
-
-	// why is workflowID there ?
-
-	tags := make([]string, 0)
-	resp.Diagnostics.Append(plan.Tags.ElementsAs(ctx, &tags, false)...)
-	updateReq.Tags = tags
-
-	stepsUpdated, newSteps, err := buildStepsUpdate(plan.Steps, state.Steps)
-	if err != nil {
-		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to build steps update: %s", err))
-		return
-	}
-	if stepsUpdated {
-		updateReq.Steps = newSteps
-	}
-
-	// return if no changes
-	if updateReq.Description == nil && updateReq.Active == nil &&
-		updateReq.ValidatePayload == nil && len(newSteps) == 0 {
-		return
-	}
-
 	if plan.WorkflowId.IsNull() || plan.WorkflowId.IsUnknown() {
 		resp.Diagnostics.AddError("Client error", "Cannot update workflow : unable to retrieve workflow_id")
 		return
 	}
 
-	workflowRes, err := r.apiClient.UpdateWorkflow(ctx, plan.WorkflowId.ValueString(), &updateReq)
+	stepsChanged, updateSteps, err := buildStepsUpdate(plan.Steps, state.Steps)
+	if err != nil {
+		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to build steps update: %s", err))
+		return
+	}
+
+	// return if no changes
+	if plan.Name.Equal(state.Name) && plan.Origin.Equal(state.Origin) &&
+		plan.Tags.Equal(state.Tags) &&
+		plan.Description.Equal(state.Description) &&
+		plan.Active.Equal(state.Active) &&
+		plan.ValidatePayload.Equal(state.ValidatePayload) &&
+		!stepsChanged {
+		return
+	}
+
+	var updateReq components.UpdateWorkflowDto
+	updateReq.Name = plan.Name.ValueString()                                    // must always be set
+	updateReq.Origin = components.ResourceOriginEnum(plan.Origin.ValueString()) // must always be set
+	updateReq.Steps = updateSteps                                               // must always be set
+	updateReq.Active = helpers.FromTfBool(plan.Active)                          // will default to false for prod if not set
+	tags := make([]string, 0)
+	resp.Diagnostics.Append(plan.Tags.ElementsAs(ctx, &tags, false)...)
+	updateReq.Tags = tags // must always be set
+
+	// helpers.SetStringPtrIfChanged(plan.WorkflowId, state.WorkflowId, &updateReq.WorkflowID) // it's a trap, you cannot update the workflow_id through this endpoint of the API
+	helpers.SetStringPtrIfChanged(plan.Description, state.Description, &updateReq.Description)
+	helpers.SetBoolPtrIfChanged(plan.ValidatePayload, state.ValidatePayload, &updateReq.ValidatePayload)
+
+	workflowRes, err := r.client.Workflows.Update(ctx, plan.WorkflowId.ValueString(), updateReq, nil)
 	if err != nil {
 		resp.Diagnostics.AddError("Client error", fmt.Sprintf("Unable to update workflow: %s", err))
 		return
@@ -551,7 +577,7 @@ func (r *WorkflowResource) Update(ctx context.Context, req resource.UpdateReques
 	}
 
 	// Read the workflow response into the state data model
-	resp.Diagnostics.Append(state.setFromResponseDTO(ctx, workflowRes)...)
+	resp.Diagnostics.Append(state.setFromResponseDTO(ctx, workflowRes.WorkflowResponseDto)...)
 	if resp.Diagnostics.HasError() {
 		return
 	}
@@ -587,8 +613,13 @@ func (r *WorkflowResource) ImportState(ctx context.Context, req resource.ImportS
 	resource.ImportStatePassthroughID(ctx, path.Root("workflow_id"), req, resp)
 }
 
-func (data *WorkflowResourceModel) setFromResponseDTO(ctx context.Context, workflow *api_client.WorkflowResponseDto) diag.Diagnostics {
+func (data *WorkflowResourceModel) setFromResponseDTO(ctx context.Context, workflow *components.WorkflowResponseDto) diag.Diagnostics {
 	var rdiags diag.Diagnostics
+	if workflow == nil {
+		rdiags.AddError("Client Error", "Workflow is nil")
+		return rdiags
+	}
+
 	data.Id = types.StringValue(workflow.ID)
 	data.WorkflowId = types.StringValue(workflow.WorkflowID)
 	data.Name = types.StringValue(workflow.Name)
@@ -643,18 +674,20 @@ func (w *WorkflowStepResourceModel) convertToNovuStep() (*components.Steps, erro
 			Type: components.StepTypeEnumPush,
 		}
 		if pushStep.ControlValues != nil {
-			controlValues := components.PushStepUpsertDtoControlValues{
-				Subject: helpers.FromTfString(pushStep.ControlValues.Subject),
-				Body:    helpers.FromTfString(pushStep.ControlValues.Body),
-			}
+			controlValues := components.CreatePushStepUpsertDtoControlValuesPushControlDto(
+				components.PushControlDto{
+					Subject: helpers.FromTfString(pushStep.ControlValues.Subject),
+					Body:    helpers.FromTfString(pushStep.ControlValues.Body),
+				})
 			novuStepPush.ControlValues = &controlValues
 		}
 
 		steps := components.CreateStepsPush(novuStepPush)
 		return &steps, nil
-	}
-	return nil, fmt.Errorf("no step type found")
+	default:
+		return nil, fmt.Errorf("unsupported step type: %s. For now, only push steps are supported", stepType)
 
+	}
 }
 
 func (w *WorkflowStepResourceModel) getType() (components.StepsType, error) {
@@ -664,7 +697,7 @@ func (w *WorkflowStepResourceModel) getType() (components.StepsType, error) {
 	if w.PushStep != nil {
 		return components.StepsTypePush, nil
 	}
-	return "", fmt.Errorf("no step type found")
+	return "", fmt.Errorf("no step type found or unsupported step type. For now, only push steps are supported")
 }
 
 func (w *WorkflowStepResourceModel) sameAs(other *WorkflowStepResourceModel, skipComputed bool) bool {
@@ -717,7 +750,7 @@ func (cv *WorkflowStepControlValuesResourceModel) sameAs(other *WorkflowStepCont
 	return cv.Subject.Equal(other.Subject) && cv.Body.Equal(other.Body)
 }
 
-func buildStepsList(ctx context.Context, workflow *api_client.WorkflowResponseDto) ([]WorkflowStepResourceModel, error) {
+func buildStepsList(ctx context.Context, workflow *components.WorkflowResponseDto) ([]WorkflowStepResourceModel, error) {
 	if workflow == nil {
 		return nil, fmt.Errorf("workflow is nil")
 	}
@@ -730,7 +763,7 @@ func buildStepsList(ctx context.Context, workflow *api_client.WorkflowResponseDt
 	return stepsSlice, nil
 }
 
-func readStepsSlice(ctx context.Context, workflow *api_client.WorkflowResponseDto) ([]WorkflowStepResourceModel, error) {
+func readStepsSlice(ctx context.Context, workflow *components.WorkflowResponseDto) ([]WorkflowStepResourceModel, error) {
 	if workflow == nil {
 		return nil, fmt.Errorf("workflow is nil")
 	}
@@ -751,7 +784,7 @@ func readStepsSlice(ctx context.Context, workflow *api_client.WorkflowResponseDt
 	return out, nil
 }
 
-func readPushStepAsModel(ctx context.Context, step *api_client.WorkflowResponseDtoSteps) (*WorkflowPushStepResourceModel, error) {
+func readPushStepAsModel(ctx context.Context, step *components.WorkflowResponseDtoSteps) (*WorkflowPushStepResourceModel, error) {
 	if step.PushStepResponseDto == nil {
 		return nil, fmt.Errorf("push step is empty")
 	}
@@ -881,6 +914,8 @@ func createWorklowRequest(ctx context.Context, data *WorkflowResourceModel) (*co
 
 func buildStepsUpdate(planSteps []WorkflowStepResourceModel, stateSteps []WorkflowStepResourceModel) (bool, []components.UpdateWorkflowDtoSteps, error) {
 
+	dtoSteps := make([]components.UpdateWorkflowDtoSteps, 0)
+
 	hasChanges := false
 	nbPlanSteps := len(planSteps)
 	nbStateSteps := len(stateSteps)
@@ -888,7 +923,7 @@ func buildStepsUpdate(planSteps []WorkflowStepResourceModel, stateSteps []Workfl
 	// 1. Detect if changes
 	hasChanges = nbPlanSteps != nbStateSteps
 	if !hasChanges {
-		for i := 0; i < nbPlanSteps; i++ {
+		for i := range nbPlanSteps {
 			if !planSteps[i].sameAs(&stateSteps[i], true) {
 				hasChanges = true
 				break
@@ -896,22 +931,17 @@ func buildStepsUpdate(planSteps []WorkflowStepResourceModel, stateSteps []Workfl
 		}
 	}
 
-	if !hasChanges {
-		return hasChanges, nil, nil
-	}
-
 	//2. If changes, build the update steps
-	newSteps := make([]components.UpdateWorkflowDtoSteps, 0)
-	for i := 0; i < nbPlanSteps; i++ {
-		novuStep, err := planSteps[i].convertToNovuStep()
+	for _, planStep := range planSteps {
+		novuStep, err := planStep.convertToNovuStep()
 		if err != nil {
-			return false, nil, fmt.Errorf("unable to convert step to novu step: %s", err)
+			return hasChanges, dtoSteps, fmt.Errorf("unable to convert step to novu step: %s", err)
 		}
-		updateSteps := toUpdateSteps(novuStep)
-		newSteps = append(newSteps, updateSteps)
+		updateStep := toUpdateSteps(novuStep)
+		dtoSteps = append(dtoSteps, updateStep)
 	}
 
-	return hasChanges, newSteps, nil
+	return hasChanges, dtoSteps, nil
 
 }
 

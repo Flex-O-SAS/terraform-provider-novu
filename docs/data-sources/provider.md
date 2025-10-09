@@ -4,14 +4,14 @@ page_title: "novu_provider Data Source - novu"
 subcategory: ""
 description: |-
   Provider data source. The available providers are listed in the novu go SDK, and are subject to change. This data source only checks if the provider exists in the current version of the novu go SDK, it does not make any API call as Novu does not have a dedicated API for providers.
-  You may find the latest list of supported providers in the novu go SDK doc: https://github.com/novuhq/novu-go/blob/v1.3.0/docs/models/components/providersidenum.md
+  You may find the latest list of supported providers in the novu go SDK doc: https://github.com/novuhq/novu-go/blob/v1.4.0/docs/models/components/providersidenum.md
   If your provider is not in this list but is present in https://github.com/novuhq/novu-go/blob/main/docs/models/components/providersidenum.md, the terraform provider will not be able to use it until it is updated.
 ---
 
 # novu_provider (Data Source)
 
 Provider data source. The available providers are listed in the novu go SDK, and are subject to change. This data source only checks if the provider exists in the current version of the novu go SDK, it does not make any API call as Novu does not have a dedicated API for providers.
- You may find the latest list of supported providers in the novu go SDK doc: https://github.com/novuhq/novu-go/blob/v1.3.0/docs/models/components/providersidenum.md
+ You may find the latest list of supported providers in the novu go SDK doc: https://github.com/novuhq/novu-go/blob/v1.4.0/docs/models/components/providersidenum.md
  If your provider is not in this list but is present in https://github.com/novuhq/novu-go/blob/main/docs/models/components/providersidenum.md, the terraform provider will not be able to use it until it is updated.
 
 ## Example Usage

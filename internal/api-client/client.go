@@ -20,10 +20,7 @@ var (
 )
 
 type NovuApiClient interface {
-	GetWorkflow(ctx context.Context, workflowID string) (*WorkflowResponseDto, error)
-	GetWorkflowPolymorphic(ctx context.Context, workflowID string) (*WorkflowResponseDto, *ApiClientResponse, error)
-	UpdateWorkflow(ctx context.Context, workflowID string, updateReq *components.UpdateWorkflowDto) (*WorkflowResponseDto, error)
-	CreateWorkflow(ctx context.Context, createReq *components.CreateWorkflowDto) (*WorkflowResponseDto, error)
+	GetWorkflow(ctx context.Context, workflowID string) (*components.WorkflowResponseDto, *ApiClientResponse, error)
 	CreateIntegration(ctx context.Context, createReq *components.CreateIntegrationRequestDto) (*components.IntegrationResponseDto, *ApiClientResponse, error)
 	UpdateIntegration(ctx context.Context, integrationID string, updateReq *components.UpdateIntegrationRequestDto) (*components.IntegrationResponseDto, *ApiClientResponse, error)
 }

@@ -115,7 +115,7 @@ func TestWorkflowResourceBasic(t *testing.T) {
 					statecheck.ExpectKnownValue("novu_workflow.test", tfjsonpath.New("steps").AtSliceIndex(0).AtMapKey("push_step").AtMapKey("issues"),
 						knownvalue.ObjectExact(
 							map[string]knownvalue.Check{
-								"controls":    knownvalue.Null(),
+								"controls":    knownvalue.ListSizeExact(0),
 								"integration": knownvalue.ListSizeExact(1),
 							},
 						),
