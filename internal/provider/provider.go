@@ -20,6 +20,8 @@ import (
 // Ensure NovuProvider satisfies various provider interfaces.
 var _ provider.Provider = &NovuProvider{}
 
+var markdownDescription = `A minimal Terraform provider for managing some [Novu](https://novu.co) resources.`
+
 // NovuProvider defines the provider implementation.
 type NovuProvider struct {
 	// version is set to the provider version on release, "dev" when the
@@ -47,6 +49,7 @@ func (p *NovuProvider) Metadata(ctx context.Context, req provider.MetadataReques
 
 func (p *NovuProvider) Schema(ctx context.Context, req provider.SchemaRequest, resp *provider.SchemaResponse) {
 	resp.Schema = schema.Schema{
+		MarkdownDescription: markdownDescription,
 		Attributes: map[string]schema.Attribute{
 			"api_key": schema.StringAttribute{
 				MarkdownDescription: "The API key for the Novu provider",
