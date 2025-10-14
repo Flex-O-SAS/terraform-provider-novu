@@ -17,6 +17,7 @@ Provider data source. The available providers are listed in the novu go SDK, and
 ## Example Usage
 
 ```terraform
+# Check if the fcm provider exists
 data "novu_provider" "example" {
   name = "fcm"
 }
