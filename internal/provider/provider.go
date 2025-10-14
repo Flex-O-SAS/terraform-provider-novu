@@ -3,7 +3,6 @@ package provider
 import (
 	"context"
 	"os"
-	"time"
 
 	api_client "terraform-provider-novu/internal/api-client"
 
@@ -122,8 +121,8 @@ func (p *NovuProvider) Configure(ctx context.Context, req provider.ConfigureRequ
 		novugo.WithRetryConfig(retry.Config{
 			Strategy: "backoff",
 			Backoff: &retry.BackoffStrategy{
-				InitialInterval: int(1 * time.Second),
-				MaxInterval:     int(1 * time.Minute),
+				InitialInterval: 1 * 1000,
+				MaxInterval:     2 * 60 * 1000,
 				Exponent:        1.5,
 			},
 		}),
