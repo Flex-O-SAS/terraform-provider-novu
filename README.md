@@ -62,7 +62,6 @@ provider_installation {
 - `eu_region` and `api_url` cannot be set simultaneously.
 - Required arguments means either the provider configuration or the environment variable must be set.
 
-
 ## Development
 
 ### Installing Locally
@@ -159,4 +158,3 @@ Contributions are welcome! Please ensure:
 - [Novu Go SDK](https://github.com/novuhq/novu-go)
 - [Terraform Plugin Framework](https://github.com/hashicorp/terraform-plugin-framework)
 - [Terraform Provider Scaffolding](https://github.com/hashicorp/terraform-provider-scaffolding)
-
